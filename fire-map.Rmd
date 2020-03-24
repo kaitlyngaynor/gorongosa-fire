@@ -1,0 +1,72 @@
+---
+title: "Gorongosa camera traps & fire"
+author: "Kaitlyn"
+date: "3/24/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo = F, message = F, warning = F}
+library(tidyverse)
+library(sf)
+library(leaflet)
+
+# import shapefile
+hexes <- read_sf("shapefile", "CameraGridHexes") %>%
+    rename(Camera = StudySite) %>%
+    st_transform(crs = "+proj=longlat +datum=WGS84")
+
+# import camera metadata
+camera_metadata <- read.csv("cam_metadata_norm_031519.csv") %>%
+    rename(Camera = StudySite) # records and camera_operation use "Camera" not "StudySite" so this allows them to join
+
+# import fire points
+fire <- read.csv("fire_pts.csv")
+
+# join camera metadata and fire
+camera_metadata <- left_join(camera_metadata, fire)
+
+# join the metadata to the hexes
+hexes <- left_join(hexes, camera_metadata)
+```
+
+```{r, echo = F}
+map_labels <- sprintf("<strong>Camera: %s</strong>
+                      <br/>Fire Date: %s
+                      <br/>Habitat type: %s",
+    hexes$Camera, 
+    hexes$fire_DATE,
+    hexes$habitat.type, 0) %>% 
+    lapply(htmltools::HTML)
+
+factpal <- colorFactor(topo.colors(2), hexes$Species)
+
+leaflet(hexes) %>%
+        setView(34.42, -18.95, 11) %>%
+        addProviderTiles(providers$Esri.WorldImagery) %>% 
+        addPolygons(
+          data = hexes,
+          fillColor = ~factpal(Species),
+          fillOpacity = 1, 
+          weight = 1, # stroke weight of lines
+          color = "gray", # color of lines
+          label = map_labels,
+          highlight = highlightOptions(
+            weight = 2,
+            color = "white",
+            fillOpacity = 1,
+            bringToFront = TRUE)
+        )
+```
+
+The blue cameras represent grid cells that burned.
+
+Habitat types:
+
++ 1_SW = Sparse Woodland (<1 % tree cover)
++ 2_OW = Open Woodland (1-10% tree cover)
++ 3_CW = Closed Woodland (10-75% tree cover)
++ 4_F = Forest (>75% tree cover)
+
+(Plus there are some intermediate .5 ones in there, which just means they are in-between habitat types.)
